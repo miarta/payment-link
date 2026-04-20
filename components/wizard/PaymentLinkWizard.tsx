@@ -25,7 +25,7 @@ interface PaymentLinkWizardProps {
   onSuccess: (slug: string, expiry: Date) => void;
 }
 
-const STEPS = ['Info Penjual', 'Produk', 'Info Pembeli'];
+const STEPS = ['Info Pembeli', 'Info Penjual', 'Produk'];
 
 export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -58,11 +58,11 @@ export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
   const canProceed = () => {
     switch (currentStep) {
       case 0:
-        return formData.sellerName && formData.sellerEmail && formData.sellerPhone;
-      case 1:
-        return formData.productName && formData.price;
-      case 2:
         return formData.buyerName && formData.buyerEmail && formData.buyerPhone;
+      case 1:
+        return formData.sellerName && formData.sellerEmail && formData.sellerPhone;
+      case 2:
+        return formData.productName && formData.price;
       default:
         return false;
     }
@@ -137,33 +137,13 @@ export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
           <Card className="p-6 md:p-8">
             {currentStep === 0 && (
               <div>
-                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Informasi Penjual</h2>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <InputField label="Nama" name="sellerName" required value={formData.sellerName} onChange={handleChange} />
-                  <InputField label="Email" name="sellerEmail" type="email" required value={formData.sellerEmail} onChange={handleChange} />
-                  <InputField label="Telepon" name="sellerPhone" type="tel" required value={formData.sellerPhone} onChange={handleChange} className="md:col-span-2" />
-                </div>
-              </div>
-            )}
-
-            {currentStep === 1 && (
-              <div>
-                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Detail Produk</h2>
-                <div className="space-y-4">
-                  <InputField label="Nama Produk" name="productName" required value={formData.productName} onChange={handleChange} />
-                  <InputField label="Harga" name="price" type="number" required value={formData.price} onChange={handleChange} />
-                  <ImageDropzone value={formData.productImage} onChange={handleImageChange} />
-                </div>
-              </div>
-            )}
-
-            {currentStep === 2 && (
-              <div>
                 <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Informasi Pembeli</h2>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <InputField label="Nama" name="buyerName" required value={formData.buyerName} onChange={handleChange} />
-                  <InputField label="Email" name="buyerEmail" type="email" required value={formData.buyerEmail} onChange={handleChange} />
-                  <InputField label="Telepon" name="buyerPhone" type="tel" required value={formData.buyerPhone} onChange={handleChange} className="md:col-span-2" />
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <InputField label="Email" name="buyerEmail" type="email" required value={formData.buyerEmail} onChange={handleChange} />
+                    <InputField label="Telepon" name="buyerPhone" type="tel" required value={formData.buyerPhone} onChange={handleChange} />
+                  </div>
                 </div>
                 <div className="mt-6 pt-6 border-t border-gray-100">
                   <div className="flex items-start gap-3">
@@ -178,6 +158,32 @@ export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
                       Saya setuju dengan syarat dan ketentuan
                     </label>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 1 && (
+              <div>
+                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Informasi Penjual</h2>
+                <div className="space-y-4">
+                  <InputField label="Nama" name="sellerName" required value={formData.sellerName} onChange={handleChange} />
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <InputField label="Email" name="sellerEmail" type="email" required value={formData.sellerEmail} onChange={handleChange} />
+                    <InputField label="Telepon" name="sellerPhone" type="tel" required value={formData.sellerPhone} onChange={handleChange} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 2 && (
+              <div>
+                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Detail Produk</h2>
+                <div className="space-y-4">
+                  <InputField label="Nama Produk" name="productName" required value={formData.productName} onChange={handleChange} />
+                  <InputField label="Harga" name="price" type="number" required value={formData.price} onChange={handleChange} />
+                </div>
+                <div className="mt-4">
+                  <ImageDropzone value={formData.productImage} onChange={handleImageChange} />
                 </div>
               </div>
             )}
