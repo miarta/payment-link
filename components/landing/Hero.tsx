@@ -18,13 +18,18 @@ export function Hero() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6" 
               style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
               <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--primary)' }}></span>
-              <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Terima pembayaran secara instan</span>
+              <span className="text-sm font-medium" style={{ color: 'var(--primary)' }}>Link Payment Tanpa Login</span>
             </div>
-            <h1 className="text-5xl md:text-6xl font-bold text-dark mb-6 leading-tight">
-              Buat Tautan <span className="text-gradient">Pembayaran</span> dalam Hitungan Detik
+            <h1 className="font-bold mb-6 leading-tight text-gray-900">
+              <span className="text-gradient text-5xl md:text-6xl block">
+                Kirim Link
+              </span>
+              <span className="text-4xl md:text-5xl block mt-2">
+                Uang Masuk Sekarang
+              </span>
             </h1>
             <p className="text-xl text-gray mb-8 max-w-lg">
-              Tanpa login. Tanpa setup. Buat saja tautan pembayaran dan bagikan ke pelanggan untuk langsung menerima uang.
+              Tanpa ribet. tanpa tunggu. Pelanggan bayar dalam hitungan detik.
             </p>
             <div className="flex flex-wrap gap-4">
               <Link href="/link">
