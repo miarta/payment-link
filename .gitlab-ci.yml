@@ -1,0 +1,180 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# iPaymu Link Payment — GitLab CI/CD → Google Cloud Run
+#
+# Build method mirrors Vercel's pipeline but targets GCP:
+#   1. npm ci          → install dependencies
+#   2. npm run build   → Next.js build (standalone output)
+#   3. docker build    → multi-stage image (~150 MB)
+#   4. docker push     → Artifact Registry
+#   5. gcloud run deploy --prebuilt → Cloud Run (preview or production)
+#
+# Required CI/CD variables (Settings → CI/CD → Variables):
+#   GCP_PROJECT_ID          — your GCP project ID
+#   GCP_REGION              — e.g. asia-southeast1
+#   GCP_ARTIFACT_REGISTRY   — Artifact Registry repo, e.g. asia-southeast1-docker.pkg.dev/my-project/ipaymu
+#   GCP_SERVICE_ACCOUNT_KEY — JSON key of the deploy service account (mask + protect)
+#   CLOUD_RUN_SERVICE       — Cloud Run service name, e.g. ipaymu-link-payment
+# ─────────────────────────────────────────────────────────────────────────────
+
+stages:
+  - lint
+  - build
+  - publish
+  - deploy
+
+variables:
+  IMAGE_NAME: $GCP_ARTIFACT_REGISTRY/ipaymu-link-payment
+  # Tag every image with the short commit SHA for traceability
+  IMAGE_TAG:  $CI_COMMIT_SHORT_SHA
+
+# ── Cache node_modules across jobs ───────────────────────────────────────────
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+  policy: pull-push
+
+# ── Lint & type-check ────────────────────────────────────────────────────────
+lint:
+  stage: lint
+  image: node:20-alpine
+  script:
+    - npm ci --prefer-offline
+    - npm run lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ── Next.js build ────────────────────────────────────────────────────────────
+# Runs `npm run build` to verify the app compiles before building the image.
+# Catches TS/build errors early without wasting time on docker build.
+build:
+  stage: build
+  image: node:20-alpine
+  needs: [lint]
+  script:
+    - npm ci --prefer-offline
+    - npm run build
+  artifacts:
+    paths:
+      - .next/
+    expire_in: 1 hour
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+# ── Docker build & push to Artifact Registry ─────────────────────────────────
+publish:
+  stage: publish
+  image: docker:27
+  needs: [build]
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    # Authenticate to GCP using the service account key
+    - echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa-key.json
+    - docker login -u _json_key --password-stdin https://$(echo $GCP_ARTIFACT_REGISTRY | cut -d'/' -f1) < /tmp/sa-key.json
+    - rm /tmp/sa-key.json
+  script:
+    - docker build
+        --tag $IMAGE_NAME:$IMAGE_TAG
+        --tag $IMAGE_NAME:$CI_COMMIT_REF_SLUG
+        --cache-from $IMAGE_NAME:$CI_COMMIT_REF_SLUG
+        .
+    - docker push $IMAGE_NAME:$IMAGE_TAG
+    - docker push $IMAGE_NAME:$CI_COMMIT_REF_SLUG
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+# ── Deploy to Cloud Run (preview) ────────────────────────────────────────────
+# Every non-main branch gets its own isolated Cloud Run revision.
+deploy:preview:
+  stage: deploy
+  image: google/cloud-sdk:alpine
+  needs: [publish]
+  rules:
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+  environment:
+    name: preview/$CI_COMMIT_REF_SLUG
+    url: $PREVIEW_URL
+    on_stop: stop:preview
+  before_script:
+    - echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa-key.json
+    - gcloud auth activate-service-account --key-file=/tmp/sa-key.json
+    - gcloud config set project $GCP_PROJECT_ID
+    - rm /tmp/sa-key.json
+  script:
+    - |
+      PREVIEW_URL=$(gcloud run deploy ${CLOUD_RUN_SERVICE}-preview-${CI_COMMIT_REF_SLUG} \
+        --image=$IMAGE_NAME:$IMAGE_TAG \
+        --region=$GCP_REGION \
+        --platform=managed \
+        --allow-unauthenticated \
+        --port=8080 \
+        --max-instances=2 \
+        --set-env-vars="NODE_ENV=production" \
+        --tag=preview-${CI_COMMIT_SHORT_SHA} \
+        --format="value(status.url)" \
+        --quiet)
+
+      echo "Preview URL: $PREVIEW_URL"
+      echo "PREVIEW_URL=$PREVIEW_URL" >> deploy.env
+  artifacts:
+    reports:
+      dotenv: deploy.env
+
+# ── Tear down preview environment ────────────────────────────────────────────
+stop:preview:
+  stage: deploy
+  image: google/cloud-sdk:alpine
+  needs: []
+  rules:
+    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+      when: manual
+  environment:
+    name: preview/$CI_COMMIT_REF_SLUG
+    action: stop
+  before_script:
+    - echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa-key.json
+    - gcloud auth activate-service-account --key-file=/tmp/sa-key.json
+    - gcloud config set project $GCP_PROJECT_ID
+    - rm /tmp/sa-key.json
+  script:
+    - gcloud run services delete ${CLOUD_RUN_SERVICE}-preview-${CI_COMMIT_REF_SLUG}
+        --region=$GCP_REGION
+        --platform=managed
+        --quiet
+
+# ── Deploy to Cloud Run (production) ─────────────────────────────────────────
+# Only runs on the default branch. Promotes the image to the production service.
+deploy:production:
+  stage: deploy
+  image: google/cloud-sdk:alpine
+  needs: [publish]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: production
+    url: https://ipaymu.link
+  before_script:
+    - echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa-key.json
+    - gcloud auth activate-service-account --key-file=/tmp/sa-key.json
+    - gcloud config set project $GCP_PROJECT_ID
+    - rm /tmp/sa-key.json
+  script:
+    - |
+      gcloud run deploy $CLOUD_RUN_SERVICE \
+        --image=$IMAGE_NAME:$IMAGE_TAG \
+        --region=$GCP_REGION \
+        --platform=managed \
+        --allow-unauthenticated \
+        --port=8080 \
+        --min-instances=0 \
+        --max-instances=10 \
+        --set-env-vars="NODE_ENV=production" \
+        --quiet
+
+      echo "Deployed $IMAGE_NAME:$IMAGE_TAG to production"
