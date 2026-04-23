@@ -1,11 +1,19 @@
+import './globals.css';
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="id">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>iPaymu - Payment Links</title>
+        <link rel="icon" href="/fav.ico" type="image/x-icon" />
+      </head>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
