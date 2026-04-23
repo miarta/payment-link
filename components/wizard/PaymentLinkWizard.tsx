@@ -9,6 +9,7 @@ import { Card } from '@/components/Card';
 import { ImageDropzone } from '@/components/ImageDropzone';
 
 interface FormData {
+  role: 'pembeli' | 'penjual' | '';
   sellerName: string;
   sellerEmail: string;
   sellerPhone: string;
@@ -25,12 +26,13 @@ interface PaymentLinkWizardProps {
   onSuccess: (slug: string, expiry: Date) => void;
 }
 
-const STEPS = ['Info Pembeli', 'Info Penjual', 'Produk'];
+const STEPS = ['Pilih Peran', 'Info Pembeli', 'Info Penjual', 'Produk'];
 
 export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<FormData>({
+const [formData, setFormData] = useState<FormData>({
+    role: '',
     sellerName: '',
     sellerEmail: '',
     sellerPhone: '',
@@ -58,10 +60,12 @@ export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
   const canProceed = () => {
     switch (currentStep) {
       case 0:
-        return formData.buyerName && formData.buyerEmail && formData.buyerPhone;
+        return formData.role !== '';
       case 1:
-        return formData.sellerName && formData.sellerEmail && formData.sellerPhone;
+        return formData.buyerName && formData.buyerEmail && formData.buyerPhone;
       case 2:
+        return formData.sellerName && formData.sellerEmail && formData.sellerPhone;
+      case 3:
         return formData.productName && formData.price;
       default:
         return false;
@@ -137,6 +141,49 @@ export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
           <Card className="p-6 md:p-8">
             {currentStep === 0 && (
               <div>
+                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Pilih Peran</h2>
+                <p className="text-[#6B7280] text-sm mb-6">Silakan pilih peran Anda dalam transaksi ini</p>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, role: 'pembeli' }))}
+                    className={`p-6 border-2 rounded-xl text-left transition-all ${
+                      formData.role === 'pembeli'
+                        ? 'border-[#2563EB] bg-blue-50'
+                        : 'border-gray-200 hover:border-[#2563EB] hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
+                      <svg className="w-6 h-6 text-[#2563EB]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-[#1F2937] mb-1">Pembeli</h3>
+                    <p className="text-sm text-[#6B7280]">Saya ingin melakukan pembayaran</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, role: 'penjual' }))}
+                    className={`p-6 border-2 rounded-xl text-left transition-all ${
+                      formData.role === 'penjual'
+                        ? 'border-[#2563EB] bg-blue-50'
+                        : 'border-gray-200 hover:border-[#2563EB] hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mb-3">
+                      <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-[#1F2937] mb-1">Penjual</h3>
+                    <p className="text-sm text-[#6B7280]">Saya ingin menerima pembayaran</p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 1 && (
+              <div>
                 <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Informasi Pembeli</h2>
                 <div className="space-y-4">
                   <InputField label="Nama" name="buyerName" required value={formData.buyerName} onChange={handleChange} />
@@ -144,6 +191,32 @@ export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
                     <InputField label="Email" name="buyerEmail" type="email" required value={formData.buyerEmail} onChange={handleChange} />
                     <InputField label="Telepon" name="buyerPhone" type="tel" required value={formData.buyerPhone} onChange={handleChange} />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 2 && (
+              <div>
+                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Informasi Penjual</h2>
+                <div className="space-y-4">
+                  <InputField label="Nama" name="sellerName" required value={formData.sellerName} onChange={handleChange} />
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <InputField label="Email" name="sellerEmail" type="email" required value={formData.sellerEmail} onChange={handleChange} />
+                    <InputField label="Telepon" name="sellerPhone" type="tel" required value={formData.sellerPhone} onChange={handleChange} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 3 && (
+              <div>
+                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Detail Produk</h2>
+                <div className="space-y-4">
+                  <InputField label="Nama Produk" name="productName" required value={formData.productName} onChange={handleChange} />
+                  <InputField label="Harga" name="price" type="number" required value={formData.price} onChange={handleChange} />
+                </div>
+                <div className="mt-4">
+                  <ImageDropzone value={formData.productImage} onChange={handleImageChange} />
                 </div>
                 <div className="mt-6 pt-6 border-t border-gray-100">
                   <div className="flex items-start gap-3">
@@ -158,32 +231,6 @@ export function PaymentLinkWizard({ onSuccess }: PaymentLinkWizardProps) {
                       Saya setuju dengan syarat dan ketentuan
                     </label>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 1 && (
-              <div>
-                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Informasi Penjual</h2>
-                <div className="space-y-4">
-                  <InputField label="Nama" name="sellerName" required value={formData.sellerName} onChange={handleChange} />
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <InputField label="Email" name="sellerEmail" type="email" required value={formData.sellerEmail} onChange={handleChange} />
-                    <InputField label="Telepon" name="sellerPhone" type="tel" required value={formData.sellerPhone} onChange={handleChange} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 2 && (
-              <div>
-                <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Detail Produk</h2>
-                <div className="space-y-4">
-                  <InputField label="Nama Produk" name="productName" required value={formData.productName} onChange={handleChange} />
-                  <InputField label="Harga" name="price" type="number" required value={formData.price} onChange={handleChange} />
-                </div>
-                <div className="mt-4">
-                  <ImageDropzone value={formData.productImage} onChange={handleImageChange} />
                 </div>
               </div>
             )}
