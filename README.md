@@ -69,7 +69,6 @@ ipaymu-link-payment/
 
 ---
 
-## Getting Started
 
 ### Prerequisites
 
