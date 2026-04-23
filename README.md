@@ -209,22 +209,27 @@ PAYMENT_GATEWAY_API_KEY=
 
 ## Deployment
 
-### Vercel (recommended)
+### Google Cloud Run (CI/CD via GitLab)
+
+The included `.gitlab-ci.yml` builds and deploys to Cloud Run automatically.
+
+**Required GitLab CI/CD variables** (`Settings → CI/CD → Variables`):
+
+| Variable | Description |
+|---|---|
+| `GCP_PROJECT_ID` | GCP project ID |
+| `GCP_REGION` | e.g. `asia-southeast1` |
+| `GCP_ARTIFACT_REGISTRY` | e.g. `asia-southeast1-docker.pkg.dev/my-project/ipaymu` |
+| `GCP_SERVICE_ACCOUNT_KEY` | JSON key of the deploy service account (mask it) |
+| `CLOUD_RUN_SERVICE` | Cloud Run service name, e.g. `ipaymu-link-payment` |
+
+Push to any branch → preview deployment. Push to `main` → production.
+
+### Local Docker build
 
 ```bash
-npm i -g vercel
-vercel
-```
-
-### Docker
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY . .
-RUN npm ci && npm run build
-EXPOSE 3000
-CMD ["npm", "run", "start"]
+docker build -t ipaymu-link-payment .
+docker run -p 8080:8080 ipaymu-link-payment
 ```
 
 ---
