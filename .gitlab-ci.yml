@@ -53,7 +53,7 @@ staging:
     - export MAX_REPLICAS=1
   script:
     - kubectl config get-contexts
-  - kubectl config use-context ipaymu/ipaymu-core:sandbox
+    - kubectl config use-context ipaymu/ipaymu-core:sandbox
     - kubectl cluster-info
     - kubectl create ns $KUBE_NAMESPACE --dry-run -o yaml | kubectl apply -f -
     - kubectl version
