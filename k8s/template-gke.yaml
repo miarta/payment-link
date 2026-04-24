@@ -36,8 +36,8 @@ spec:
             requests:
               cpu: "100m"
               memory: "64m"
-          command: ["/bin/sh"]
-          args: ["-c", "npm run prod"]
+          # command: ["/bin/sh"]
+          # args: ["-c", "npm run prod"]
           readinessProbe:
             httpGet:
               path: /api/healthz
