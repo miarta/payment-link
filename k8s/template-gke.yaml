@@ -127,6 +127,14 @@ spec:
   sessionAffinity:
     affinityType: "GENERATED_COOKIE"  
     affinityCookieTtlSec: 50
+  healthCheck:
+    checkIntervalSec: 30
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /api/healthz
+    port: 3000
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -152,7 +160,7 @@ metadata:
   name: ${CI_ENVIRONMENT_SLUG}
   namespace: ${KUBE_NAMESPACE}
 spec:
-  minAvailable: 2
+  minAvailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
