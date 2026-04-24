@@ -69,7 +69,7 @@ export function Hero() {
                   background: 'linear-gradient(135deg, var(--primary) 0%, var(--secondary) 50%, var(--accent) 100%)' 
                 }}>
               </div>
-              <Image src="https://ipaymu.com/wp-content/themes/ipaymu_v3/page-ID/static/assets/hero-img-high.png" alt="Hero Image" width={600} height={400} className="relative rounded-3xl" />
+              <Image src="/minyak-goreng.webp" alt="Hero Image" width={600} height={400} className="relative rounded-3xl" />
             </div>
           </div>
         </div>
