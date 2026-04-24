@@ -17,7 +17,7 @@ build:
     GC_REGISTRY_IMAGE: asia.gcr.io/$GCLOUD_PROJECT_ID/$CI_PROJECT_NAME
     ENV_VARIABLE: ${CI_COMMIT_BRANCH}_env
   services:
-    - docker:20-dind
+    - docker:26-dind
   before_script:
     - docker system prune -af
     - docker login -u _json_key -p "$(cat $GCLOUD_SERVICE_KEY)" https://asia.gcr.io
