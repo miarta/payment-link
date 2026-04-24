@@ -29,24 +29,44 @@ spec:
         - name: app
           image: ${CI_APPLICATION_REPOSITORY}
           imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
           resources:
             limits:
               cpu: "${LIMIT_CPU}"
               memory: "${LIMIT_MEMORY}"
             requests:
               cpu: "100m"
-              memory: "64m"
+              memory: "128Mi"
           # command: ["/bin/sh"]
           # args: ["-c", "npm run prod"]
+          startupProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            initialDelaySeconds: 5
+            timeoutSeconds: 3
+            periodSeconds: 5
+            successThreshold: 1
+            failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /health
+              path: /api/healthz
               port: 3000
-            initialDelaySeconds: 30
             timeoutSeconds: 3
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            timeoutSeconds: 5
             periodSeconds: 30
             successThreshold: 1
-            failureThreshold: 3  
+            failureThreshold: 5
 
 ---
 apiVersion: autoscaling/v2
@@ -125,15 +145,15 @@ metadata:
   namespace: ${KUBE_NAMESPACE}
 spec:
   sessionAffinity:
-    affinityType: "GENERATED_COOKIE"  
+    affinityType: "GENERATED_COOKIE"
     affinityCookieTtlSec: 50
   healthCheck:
-    checkIntervalSec: 30
+    checkIntervalSec: 15
     timeoutSec: 5
     healthyThreshold: 1
     unhealthyThreshold: 3
     type: HTTP
-    requestPath: /health
+    requestPath: /api/healthz
     port: 3000
 ---
 apiVersion: networking.k8s.io/v1
