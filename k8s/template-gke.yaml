@@ -1,0 +1,158 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+  annotations:
+    app.gitlab.com/app: ${CI_PROJECT_PATH_SLUG}
+    app.gitlab.com/env: ${CI_ENVIRONMENT_SLUG}
+spec:
+  replicas: ${CI_REPLICAS}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        commit: "${CI_COMMIT_SHORT_SHA}"
+        app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry-${CI_PROJECT_PATH_SLUG}
+      containers:
+        - name: app
+          image: ${CI_APPLICATION_REPOSITORY}
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: "${LIMIT_CPU}"
+              memory: "${LIMIT_MEMORY}"
+            requests:
+              cpu: "100m"
+              memory: "64m"
+          command: ["/bin/sh"]
+          args: ["-c", "npm run start:prod"]
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 120
+            timeoutSeconds: 3
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3  
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${CI_ENVIRONMENT_SLUG}
+  minReplicas: 1
+  maxReplicas: ${MAX_REPLICAS}
+  metrics:
+    - resource:
+        name: memory
+        target:
+          averageUtilization: 70
+          type: Utilization
+      type: Resource
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 70
+          type: Utilization
+      type: Resource
+
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: ${KUBE_NAMESPACE}
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  domains:
+${DOMAINS}
+---
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+  annotations:
+    app.gitlab.com/app: ${CI_PROJECT_PATH_SLUG}
+    app.gitlab.com/env: ${CI_ENVIRONMENT_SLUG}
+    cloud.google.com/backend-config: '{"default": "${CI_ENVIRONMENT_SLUG}"}'
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  selector:
+    app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      protocol: TCP
+      targetPort: 3000
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: "${CI_ENVIRONMENT_SLUG}"
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  sessionAffinity:
+    affinityType: "GENERATED_COOKIE"  
+    affinityCookieTtlSec: 50
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}-gce
+  namespace: ${KUBE_NAMESPACE}
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "${IP_ADDRESS_NAME}"
+    networking.gke.io/managed-certificates: ${KUBE_NAMESPACE}
+    networking.gke.io/v1beta1.FrontendConfig: "${CI_ENVIRONMENT_SLUG}"
+spec:
+  defaultBackend:
+    service:
+      name: ${CI_ENVIRONMENT_SLUG}
+      port:
+        number: 3000
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ${CI_ENVIRONMENT_SLUG}
+  namespace: ${KUBE_NAMESPACE}
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ${CI_ENVIRONMENT_SLUG}

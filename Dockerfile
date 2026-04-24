@@ -1,38 +1,19 @@
-# ── Stage 1: Install dependencies ────────────────────────────────────────────
-FROM node:20-alpine AS deps
-WORKDIR /app
+FROM node:20-alpine
 
-COPY package.json package-lock.json ./
-RUN npm ci
+# create dir
+RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
+WORKDIR /home/node/app
 
-# ── Stage 2: Build ────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
-WORKDIR /app
+# build dependencies
+COPY ./package*.json ./
+USER node
+RUN npm install
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+# copy in source code
+COPY --chown=node:node ./ ./
 
-RUN npm run build
+# port
+EXPOSE 3000
 
-# ── Stage 3: Production runner ────────────────────────────────────────────────
-# Uses Next.js standalone output — no node_modules needed at runtime
-FROM node:20-alpine AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=8080
-ENV HOSTNAME="0.0.0.0"
-
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser  --system --uid 1001 nextjs
-
-# Copy only what next build --standalone produced
-COPY --from=builder /app/public                  ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static     ./.next/static
-
-USER nextjs
-
-EXPOSE 8080
-
-CMD ["node", "server.js"]
+# start server
+# CMD [ "npm", "run", "prod" ]

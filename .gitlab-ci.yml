@@ -1,180 +1,145 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# iPaymu Link Payment — GitLab CI/CD → Google Cloud Run
-#
-# Build method mirrors Vercel's pipeline but targets GCP:
-#   1. npm ci          → install dependencies
-#   2. npm run build   → Next.js build (standalone output)
-#   3. docker build    → multi-stage image (~150 MB)
-#   4. docker push     → Artifact Registry
-#   5. gcloud run deploy --prebuilt → Cloud Run (preview or production)
-#
-# Required CI/CD variables (Settings → CI/CD → Variables):
-#   GCP_PROJECT_ID          — your GCP project ID
-#   GCP_REGION              — e.g. asia-southeast1
-#   GCP_ARTIFACT_REGISTRY   — Artifact Registry repo, e.g. asia-southeast1-docker.pkg.dev/my-project/ipaymu
-#   GCP_SERVICE_ACCOUNT_KEY — JSON key of the deploy service account (mask + protect)
-#   CLOUD_RUN_SERVICE       — Cloud Run service name, e.g. ipaymu-link-payment
-# ─────────────────────────────────────────────────────────────────────────────
-
 stages:
-  - lint
   - build
-  - publish
   - deploy
+  - release
+  - destroy
 
-variables:
-  IMAGE_NAME: $GCP_ARTIFACT_REGISTRY/ipaymu-link-payment
-  # Tag every image with the short commit SHA for traceability
-  IMAGE_TAG:  $CI_COMMIT_SHORT_SHA
-
-# ── Cache node_modules across jobs ───────────────────────────────────────────
 cache:
-  key:
-    files:
-      - package-lock.json
+  key: ${CI_PROJECT_NAME}
   paths:
     - node_modules/
-  policy: pull-push
 
-# ── Lint & type-check ────────────────────────────────────────────────────────
-lint:
-  stage: lint
-  image: node:20-alpine
-  script:
-    - npm ci --prefer-offline
-    - npm run lint
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH
-
-# ── Next.js build ────────────────────────────────────────────────────────────
-# Runs `npm run build` to verify the app compiles before building the image.
-# Catches TS/build errors early without wasting time on docker build.
 build:
   stage: build
-  image: node:20-alpine
-  needs: [lint]
-  script:
-    - npm ci --prefer-offline
-    - npm run build
-  artifacts:
-    paths:
-      - .next/
-    expire_in: 1 hour
-  rules:
-    - if: $CI_COMMIT_BRANCH
-
-# ── Docker build & push to Artifact Registry ─────────────────────────────────
-publish:
-  stage: publish
-  image: docker:27
-  needs: [build]
-  services:
-    - docker:27-dind
+  image: "registry.gitlab.com/gitlab-org/cluster-integration/auto-build-image:latest"
   variables:
-    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_CERTDIR: ""
+    GC_REGISTRY_IMAGE: asia.gcr.io/$GCLOUD_PROJECT_ID/$CI_PROJECT_NAME
+    ENV_VARIABLE: ${CI_COMMIT_BRANCH}_env
+  services:
+    - docker:20-dind
   before_script:
-    # Authenticate to GCP using the service account key
-    - echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa-key.json
-    - docker login -u _json_key --password-stdin https://$(echo $GCP_ARTIFACT_REGISTRY | cut -d'/' -f1) < /tmp/sa-key.json
-    - rm /tmp/sa-key.json
-  script:
-    - docker build
-        --tag $IMAGE_NAME:$IMAGE_TAG
-        --tag $IMAGE_NAME:$CI_COMMIT_REF_SLUG
-        --cache-from $IMAGE_NAME:$CI_COMMIT_REF_SLUG
-        .
-    - docker push $IMAGE_NAME:$IMAGE_TAG
-    - docker push $IMAGE_NAME:$CI_COMMIT_REF_SLUG
-  rules:
-    - if: $CI_COMMIT_BRANCH
-
-# ── Deploy to Cloud Run (preview) ────────────────────────────────────────────
-# Every non-main branch gets its own isolated Cloud Run revision.
-deploy:preview:
-  stage: deploy
-  image: google/cloud-sdk:alpine
-  needs: [publish]
-  rules:
-    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
-  environment:
-    name: preview/$CI_COMMIT_REF_SLUG
-    url: $PREVIEW_URL
-    on_stop: stop:preview
-  before_script:
-    - echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa-key.json
-    - gcloud auth activate-service-account --key-file=/tmp/sa-key.json
-    - gcloud config set project $GCP_PROJECT_ID
-    - rm /tmp/sa-key.json
+    - docker system prune -af
+    - docker login -u _json_key -p "$(cat $GCLOUD_SERVICE_KEY)" https://asia.gcr.io
+    - cat ${!ENV_VARIABLE} > .env
   script:
     - |
-      PREVIEW_URL=$(gcloud run deploy ${CLOUD_RUN_SERVICE}-preview-${CI_COMMIT_REF_SLUG} \
-        --image=$IMAGE_NAME:$IMAGE_TAG \
-        --region=$GCP_REGION \
-        --platform=managed \
-        --allow-unauthenticated \
-        --port=8080 \
-        --max-instances=2 \
-        --set-env-vars="NODE_ENV=production" \
-        --tag=preview-${CI_COMMIT_SHORT_SHA} \
-        --format="value(status.url)" \
-        --quiet)
-
-      echo "Preview URL: $PREVIEW_URL"
-      echo "PREVIEW_URL=$PREVIEW_URL" >> deploy.env
-  artifacts:
-    reports:
-      dotenv: deploy.env
-
-# ── Tear down preview environment ────────────────────────────────────────────
-stop:preview:
-  stage: deploy
-  image: google/cloud-sdk:alpine
-  needs: []
+      if [[ -z "$CI_COMMIT_TAG" ]]; then
+        export CI_APPLICATION_REPOSITORY=${CI_APPLICATION_REPOSITORY:-$GC_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG}
+        export CI_APPLICATION_TAG=${CI_APPLICATION_TAG:-$CI_COMMIT_SHA}
+      else
+        cat ${master_env} > .env
+        export CI_APPLICATION_REPOSITORY=${CI_APPLICATION_REPOSITORY:-$GC_REGISTRY_IMAGE}
+        export CI_APPLICATION_TAG=${CI_APPLICATION_TAG:-$CI_COMMIT_TAG}
+      fi
+    - /build/build.sh
   rules:
-    - if: $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
-      when: manual
-  environment:
-    name: preview/$CI_COMMIT_REF_SLUG
-    action: stop
+    - if: "$CI_COMMIT_TAG || $CI_COMMIT_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'"
+
+
+staging:
+  image: "registry.gitlab.com/gitlab-org/cluster-integration/auto-deploy-image:v2.0.1"
+  variables:
+    GC_REGISTRY_IMAGE: asia.gcr.io/$GCLOUD_PROJECT_ID/$CI_PROJECT_NAME
+    KUBE_NAMESPACE: ${CI_PROJECT_NAME}-staging
+  stage: deploy
   before_script:
-    - echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa-key.json
-    - gcloud auth activate-service-account --key-file=/tmp/sa-key.json
-    - gcloud config set project $GCP_PROJECT_ID
-    - rm /tmp/sa-key.json
+    - apk add -u gettext
+    - export CI_TLS_HOST=staging-loan-api.kooperasi.com binary_remote_addr='$binary_remote_addr' ssl_server_name='$ssl_server_name' fastcgi_script_name='$fastcgi_script_name' uri='$uri' query_string='$query_string' document_root='$document_root' server_name='$server_name' scheme='$scheme' request_method='$request_method' host='$host' proxy_protocol_addr='$proxy_protocol_addr' skip_cache='$skip_cache' http_cookie='$http_cookie' http_authorization='$http_authorization' upstream_cache_status='$upstream_cache_status' http_pragma='$http_pragma' request_uri='$request_uri'
+    - export CI_APPLICATION_REPOSITORY=${CI_APPLICATION_REPOSITORY:-$GC_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG}:${CI_COMMIT_SHA}
+    - export CI_REPLICAS=1
+    - export LIMIT_CPU=500m
+    - export LIMIT_MEMORY=1Gi
+    - export MAX_REPLICAS=1
   script:
-    - gcloud run services delete ${CLOUD_RUN_SERVICE}-preview-${CI_COMMIT_REF_SLUG}
-        --region=$GCP_REGION
-        --platform=managed
-        --quiet
-
-# ── Deploy to Cloud Run (production) ─────────────────────────────────────────
-# Only runs on the default branch. Promotes the image to the production service.
-deploy:production:
-  stage: deploy
-  image: google/cloud-sdk:alpine
-  needs: [publish]
+    - kubectl config get-contexts
+  - kubectl config use-context ipaymu/ipaymu-core:sandbox
+    - kubectl cluster-info
+    - kubectl create ns $KUBE_NAMESPACE --dry-run -o yaml | kubectl apply -f -
+    - kubectl version
+    - kubectl api-versions | grep autoscaling
+    - envsubst < k8s/template-gke.yaml | kubectl apply -f -
+    - kubectl patch deployment ${CI_ENVIRONMENT_SLUG} -n $KUBE_NAMESPACE -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"$(date +%s)\"}}}}}"
+    - kubectl -n $KUBE_NAMESPACE rollout status deploy/${CI_ENVIRONMENT_SLUG}
+    - kubectl get all,ing -n $KUBE_NAMESPACE
+  environment:
+    name: staging
+    url: https://${CI_TLS_HOST}
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE != "schedule" && $CI_COMMIT_BRANCH == "staging"
+
+
+destroy-staging:
+  image: "registry.gitlab.com/gitlab-org/cluster-integration/auto-deploy-image:v2.0.1"
+  variables:
+    GC_REGISTRY_IMAGE: asia.gcr.io/$GCP_PROJECT_ID/$CI_PROJECT_NAME
+    KUBE_NAMESPACE: ${CI_PROJECT_NAME}-staging
+  stage: destroy
+  before_script:
+    - apk add -u gettext
+    - export CI_TLS_HOST=$CI_COMMIT_BRANCH.ipaymu.link binary_remote_addr='$binary_remote_addr' ssl_server_name='$ssl_server_name' fastcgi_script_name='$fastcgi_script_name' uri='$uri' query_string='$query_string' document_root='$document_root' server_name='$server_name' scheme='$scheme' request_method='$request_method' host='$host' proxy_protocol_addr='$proxy_protocol_addr' skip_cache='$skip_cache' http_cookie='$http_cookie' http_authorization='$http_authorization' cookie_laravel_session='$cookie_laravel_session' upstream_cache_status='$upstream_cache_status' http_pragma='$http_pragma' request_uri='$request_uri'
+    - export CI_APPLICATION_REPOSITORY=${CI_APPLICATION_REPOSITORY:-$GC_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG}:${CI_COMMIT_SHA}
+    - export CI_REPLICAS=1
+  script:
+    - kubectl config get-contexts
+    - kubectl config use-context ipaymu/ipaymu-core:sandbox
+    - kubectl cluster-info
+    - kubectl version
+    - |
+      set -e  # Exit on error
+      # Check if namespace exists
+      if ! kubectl get ns "${KUBE_NAMESPACE}" &>/dev/null; then
+        echo "Namespace '${KUBE_NAMESPACE}' does not exist. Exiting..."
+        exit 0  # Not a failure if the namespace doesn't exist
+      fi
+
+      # Check if there are deployments in the namespace
+      deply=$(kubectl get deploy -n "${KUBE_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+      if [[ -n "$deply" ]]; then
+        echo "Found deployment '$deply'. Deleting resources..."
+        envsubst < k8s/template-gke.yaml | kubectl delete -f -
+        # Delete namespace if it exists
+        kubectl create ns $KUBE_NAMESPACE --dry-run -o yaml | kubectl delete -f - || echo "Namespace does not exist or cannot be deleted."
+      else
+        echo "No deployments found in namespace '${KUBE_NAMESPACE}'. Exiting..."
+        exit 0  # No error; just no deployments to delete
+      fi
+
+  environment:
+    name: $CI_COMMIT_BRANCH
+    action: stop
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "staging"
+
+
+production:
+  image: "registry.gitlab.com/gitlab-org/cluster-integration/auto-deploy-image:v2.0.1"
+  variables:
+    GC_REGISTRY_IMAGE: asia.gcr.io/$GCLOUD_PROJECT_ID/$CI_PROJECT_NAME
+    KUBE_NAMESPACE: ${CI_PROJECT_NAME}-production
+  stage: release
+  before_script:
+    - apk add -u gettext
+    - export CI_TLS_HOST=ipaymu.link binary_remote_addr='$binary_remote_addr' ssl_server_name='$ssl_server_name' fastcgi_script_name='$fastcgi_script_name' uri='$uri' query_string='$query_string' document_root='$document_root' server_name='$server_name' scheme='$scheme' request_method='$request_method' host='$host' proxy_protocol_addr='$proxy_protocol_addr' skip_cache='$skip_cache' http_cookie='$http_cookie' http_authorization='$http_authorization' upstream_cache_status='$upstream_cache_status' http_pragma='$http_pragma' request_uri='$request_uri'
+    - export CI_APPLICATION_REPOSITORY=${CI_APPLICATION_REPOSITORY:-$GC_REGISTRY_IMAGE}:${CI_COMMIT_TAG}
+    - export CI_REPLICAS=1
+    - export LIMIT_CPU=1
+    - export LIMIT_MEMORY=1Gi
+    - export MAX_REPLICAS=2
+  script:
+    - kubectl config get-contexts
+    - kubectl config use-context ipaymu/ipaymu-core:sandbox
+    - kubectl cluster-info
+    - kubectl create ns $KUBE_NAMESPACE --dry-run -o yaml | kubectl apply -f -
+    - kubectl version
+    - kubectl api-versions | grep autoscaling
+    - envsubst < k8s/template-gke.yaml | kubectl apply -f -
+    - kubectl patch deployment ${CI_ENVIRONMENT_SLUG} -n $KUBE_NAMESPACE -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"$(date +%s)\"}}}}}"
+    - kubectl -n $KUBE_NAMESPACE rollout status deploy/${CI_ENVIRONMENT_SLUG}
+    - kubectl get all,ing -n $KUBE_NAMESPACE
   environment:
     name: production
-    url: https://ipaymu.link
-  before_script:
-    - echo "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/sa-key.json
-    - gcloud auth activate-service-account --key-file=/tmp/sa-key.json
-    - gcloud config set project $GCP_PROJECT_ID
-    - rm /tmp/sa-key.json
-  script:
-    - |
-      gcloud run deploy $CLOUD_RUN_SERVICE \
-        --image=$IMAGE_NAME:$IMAGE_TAG \
-        --region=$GCP_REGION \
-        --platform=managed \
-        --allow-unauthenticated \
-        --port=8080 \
-        --min-instances=0 \
-        --max-instances=10 \
-        --set-env-vars="NODE_ENV=production" \
-        --quiet
-
-      echo "Deployed $IMAGE_NAME:$IMAGE_TAG to production"
+    url: https://${CI_TLS_HOST}
+  only:
+    - tags
+  when: manual
