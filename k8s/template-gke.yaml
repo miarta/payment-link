@@ -40,7 +40,7 @@ spec:
           # args: ["-c", "npm run prod"]
           readinessProbe:
             httpGet:
-              path: /api/healthz
+              path: /health
               port: 3000
             initialDelaySeconds: 30
             timeoutSeconds: 3
@@ -133,7 +133,7 @@ spec:
     healthyThreshold: 1
     unhealthyThreshold: 3
     type: HTTP
-    requestPath: /api/healthz
+    requestPath: /health
     port: 3000
 ---
 apiVersion: networking.k8s.io/v1
