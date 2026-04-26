@@ -1,5 +1,6 @@
 'use client';
 
+import { ReactNode } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { FAQSection } from '@/components/landing/FAQSection';
@@ -16,6 +17,20 @@ const faqs = [
   {
     question: 'Berapa biaya penggunaan layanan ini?',
     answer: 'Layanan iPaymu Payment Link Gratis untuk pembuatan tautan pembayaran. Biaya transaksi akan dikenakan sesuai dengan metode pembayaran yang dipilih oleh pelanggan.',
+  },
+  {
+    question: 'Bagaimana cara mendapatkan minyak goreng gratis?',
+    answer: (
+      <ol className="list-disc list-inside space-y-1">
+        <li>Download Bale by BTN</li>
+        <li>Daftar dan masukkan kode referral BALEMERC</li>
+        <li>Lakukan transaksi menggunakan Bale by BTN minimal 2 kali</li>
+        <li>Transaksi yang diakui adalah selain transaksi QRIS dan Transfer ke sesama pengguna BTN</li>
+        <li>Voucher akan dikirimkan lewat Bale by BTN</li>
+        <li>Voucher dapat ditukarkan di Indomaret terdekat</li>
+        <li>Apabila ada kendala terkait penerimaan atau penukaran voucher dapat menghubungi call center Bank BTN di 150286 / 1500286</li>
+      </ol>
+    ),
   },
   {
     question: 'Metode pembayaran apa saja yang tersedia?',

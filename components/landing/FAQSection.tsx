@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, ReactNode } from 'react';
 import { Card } from '@/components/Card';
 
 interface FAQ {
   question: string;
-  answer: string;
+  answer: string | ReactNode;
 }
 
 interface FAQSectionProps {
@@ -38,7 +38,11 @@ function FAQItem({ question, answer, defaultOpen = false }: FAQ & { defaultOpen?
           isOpen ? 'max-h-96 pb-5' : 'max-h-0'
         }`}
       >
-        <p className="text-[#6B7280] leading-relaxed">{answer}</p>
+        {typeof answer === 'string' ? (
+          <p className="text-[#6B7280] leading-relaxed">{answer}</p>
+        ) : (
+          <div className="text-[#6B7280] leading-relaxed">{answer}</div>
+        )}
       </div>
     </div>
   );

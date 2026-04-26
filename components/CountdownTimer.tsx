@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 interface CountdownTimerProps {
-  targetDate: Date;
+  targetDate: Date | string;
   onExpired?: () => void;
 }
 
@@ -11,9 +11,10 @@ export function CountdownTimer({ targetDate, onExpired }: CountdownTimerProps) {
   const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
 
   function calculateTimeLeft() {
-    const difference = targetDate.getTime() - Date.now();
+    const date = new Date(targetDate);
+    const difference = date.getTime() - Date.now();
     if (difference <= 0) return null;
-    
+
     return {
       minutes: Math.floor((difference / 1000 / 60) % 60),
       seconds: Math.floor((difference / 1000) % 60),
@@ -24,7 +25,7 @@ export function CountdownTimer({ targetDate, onExpired }: CountdownTimerProps) {
     const timer = setInterval(() => {
       const newTimeLeft = calculateTimeLeft();
       setTimeLeft(newTimeLeft);
-      
+
       if (!newTimeLeft && onExpired) {
         onExpired();
         clearInterval(timer);
@@ -35,7 +36,7 @@ export function CountdownTimer({ targetDate, onExpired }: CountdownTimerProps) {
   }, [targetDate, onExpired]);
 
   if (!timeLeft) {
-    return <span className="text-red-500 font-medium">Expired</span>;
+    return <span className="text-red-500 font-medium">Kedaluwarsa</span>;
   }
 
   return (

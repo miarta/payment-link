@@ -16,6 +16,20 @@ const landingFaqs = [
     answer: 'Layanan iPaymu Payment Link Gratis untuk pembuatan tautan pembayaran. Biaya transaksi akan dikenakan sesuai dengan metode pembayaran yang dipilih.',
   },
   {
+    question: 'Bagaimana cara mendapatkan minyak goreng gratis?',
+    answer: (
+      <ul className="list-disc list-inside space-y-1">
+        <li>Download Bale by BTN</li>
+        <li>Daftar dan masukkan kode referral BALEMERC</li>
+        <li>Lakukan transaksi menggunakan Bale by BTN minimal 2 kali</li>
+        <li>Transaksi yang diakui adalah selain transaksi QRIS dan Transfer ke sesama pengguna BTN</li>
+        <li>Voucher akan dikirimkan lewat Bale by BTN</li>
+        <li>Voucher dapat ditukarkan di Indomaret terdekat</li>
+        <li>Apabila ada kendala terkait penerimaan atau penukaran voucher dapat menghubungi call center Bank BTN di 150286 / 1500286</li>
+      </ul>
+    ),
+  },
+  {
     question: 'Metode pembayaran apa saja yang tersedia?',
     answer: 'Kami mendukung Transfer Bank (BCA, Mandiri, BNI, BRI), E-Wallet (GoPay, OVO, Dana, ShopeePay), dan Kartu Kredit/debit.',
   },

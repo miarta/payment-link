@@ -223,11 +223,12 @@ const [formData, setFormData] = useState<FormData>({
                     <input
                       type="checkbox"
                       name="terms"
+                      id="terms-checkbox"
                       checked={formData.terms}
                       onChange={handleChange}
-                      className="mt-1 w-5 h-5 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]"
+                      className="mt-1 w-5 h-5 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB] cursor-pointer"
                     />
-                    <label className="text-[#6B7280] text-sm">
+                    <label htmlFor="terms-checkbox" className="text-[#6B7280] text-sm cursor-pointer select-none">
                       Saya setuju dengan syarat dan ketentuan
                     </label>
                   </div>
